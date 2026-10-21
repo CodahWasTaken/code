@@ -1,0 +1,195 @@
+name: Fork checks and test builds
+
+on:
+  push:
+    branches:
+      - 'ci/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  pnpm_config_color: always
+
+jobs:
+  check:
+    name: Lint and Test (as upstream CI runs it for a fork PR)
+    runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: 3
+      NEXTEST_NO_TESTS: pass
+      RUSTFLAGS: -Dwarnings
+      REDIS_TOPOLOGY: cluster
+      REDIS_CONNECTION_TYPE: multiplexed
+      REDIS_URL: redis://127.0.0.1:7000,redis://127.0.0.1:7001,redis://127.0.0.1:7002,redis://127.0.0.1:7003,redis://127.0.0.1:7004,redis://127.0.0.1:7005
+      RUST_MIN_STACK: 134217728
+      UNUSED_SERVICES: --scale gotenberg=0
+      TURBO_SCM_BASE: upstream/main
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Fetch upstream main as the affected-base
+        run: |
+          git remote add upstream https://github.com/modrinth/code.git
+          git fetch --filter=blob:none upstream main
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libcurl4-openssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          rustflags: ''
+          components: clippy, rustfmt
+          cache: false
+
+      - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1 / Mold 2.41.0
+
+      - uses: cargo-bins/cargo-binstall@ead08b90bd7b2e6d81963fb9cf0b7239f66d5db4 # v1.21.0
+
+      - run: cargo binstall --no-confirm --secure --locked cargo-nextest@0.9.133
+
+      - uses: taiki-e/cache-cargo-install-action@417450f3c33ee20393705369577571770643d4c7 # v3.0.7
+        with:
+          tool: sqlx-cli@0.8.6
+          locked: false
+          no-default-features: true
+          features: rustls,postgres
+
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: pnpm install
+
+      - name: Set app environment
+        working-directory: packages/app-lib
+        run: cp .env.staging .env
+
+      - name: Free disk space for labrinth tests
+        run: sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+
+      - name: Start services
+        run: docker compose --profile clustered-redis up --wait $UNUSED_SERVICES
+
+      - name: Setup labrinth environment and database
+        working-directory: apps/labrinth
+        run: |
+          cp .env.local .env
+          sqlx database setup
+
+      - name: Lint and test (affected since upstream main)
+        run: pnpm run ci --affected
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Verify intl:extract has been run
+        run: |
+          pnpm turbo run intl:extract --force
+          pnpm scripts i18n-icu-contract prune-local --check
+          git diff --exit-code --color */*/src/locales/*/index.json
+
+  build:
+    name: Test build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - name: Windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream tags for the version number
+        shell: bash
+        run: git fetch --tags https://github.com/modrinth/code.git
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          rustflags: ''
+          target: ${{ matrix.target }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8 # v3.0.0
+        with:
+          repo: TomWright/dasel
+          tag: v2.8.1
+          extension-matching: disable
+          rename-to: ${{ contains(matrix.target, 'windows') && 'dasel.exe' || 'dasel' }}
+          chmod: 0755
+
+      - name: Test build identity, version and environment
+        shell: bash
+        run: |
+          cat > apps/app/tauri-dev.conf.json <<EOF
+          {
+            "productName": "Modrinth App (close on launch test)",
+            "mainBinaryName": "Modrinth App (close on launch test)",
+            "identifier": "ModrinthApp-close-on-launch-test",
+            "bundle": {
+              "fileAssociations": [],
+              "macOS": { "signingIdentity": "-" }
+            }
+          }
+          EOF
+          APP_VERSION="$(git describe --tags --always | sed -E 's/-([0-9]+)-(g[0-9a-fA-F]+)$/-canary+\1.\2/')"
+          echo "App version $APP_VERSION"
+          dasel put -f apps/app/Cargo.toml -t string -v "${APP_VERSION#v}" 'package.version'
+          dasel put -f packages/app-lib/Cargo.toml -t string -v "${APP_VERSION#v}" 'package.version'
+          dasel put -f apps/app-frontend/package.json -t string -v "${APP_VERSION#v}" 'version'
+          cp packages/app-lib/.env.prod packages/app-lib/.env
+
+      - run: pnpm install
+
+      - name: Build macOS app
+        if: contains(matrix.target, 'darwin')
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+        run: pnpm --filter=@modrinth/app run tauri build --target ${{ matrix.target }} --config tauri-dev.conf.json --bundles dmg
+
+      - name: Build Windows app
+        if: contains(matrix.target, 'windows')
+        shell: pwsh
+        run: |
+          $env:JAVA_HOME = "$env:JAVA_HOME_17_X64"
+          pnpm --filter=@modrinth/app run tauri build --config tauri-dev.conf.json --bundles nsis
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Modrinth App close-on-launch test (${{ matrix.name }})
+          if-no-files-found: error
+          path: |
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/release/bundle/nsis/*-setup.exe
