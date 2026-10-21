@@ -94,6 +94,7 @@ pub async fn publish_shared_instance(
     config_paths: Vec<String>,
 ) -> crate::Result<SharedInstanceAttachment> {
     let state = State::get().await?;
+    let _background_work = state.background_work.start();
     publish_shared_instance_inner(instance_id, &config_paths, &state).await?;
     emit_instance(instance_id, InstancePayloadType::Edited).await?;
 

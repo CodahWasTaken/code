@@ -58,6 +58,9 @@ pub use self::friends::*;
 mod installs;
 pub(crate) use self::installs::Installs;
 
+mod background_work;
+pub(crate) use self::background_work::BackgroundWork;
+
 mod instance_locks;
 pub(crate) use self::instance_locks::InstanceLocks;
 
@@ -105,6 +108,7 @@ pub struct State {
     /// to keep API functionality while the app is performing intensive tasks.
     pub api_semaphore: FetchSemaphore,
     pub(crate) installs: Installs,
+    pub(crate) background_work: BackgroundWork,
     pub(crate) instance_locks: InstanceLocks,
     pub(crate) synced_options: SyncedOptions,
 
@@ -367,6 +371,7 @@ impl State {
             io_semaphore,
             api_semaphore,
             installs: Installs::new(),
+            background_work: BackgroundWork::default(),
             instance_locks: InstanceLocks::default(),
             synced_options: SyncedOptions::default(),
             presence,

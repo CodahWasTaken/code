@@ -4,6 +4,7 @@ import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import java.io.*;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
@@ -107,8 +108,9 @@ public final class TheseusRpc {
         try {
             final BufferedReader reader =
                     new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            while (true) {
-                final RpcMessage message = GSON.fromJson(reader.readLine(), MESSAGE_TYPE);
+            String line;
+            while ((line = reader.readLine()) != null) {
+                final RpcMessage message = GSON.fromJson(line, MESSAGE_TYPE);
                 if (message.method == null) {
                     final ResponseWaiter<?> waiter = awaitingResponse.get(message.id);
                     if (waiter != null) {
@@ -118,6 +120,7 @@ public final class TheseusRpc {
                     mainThreadQueue.put(message);
                 }
             }
+        } catch (SocketException ignored) {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (InterruptedException ignored) {

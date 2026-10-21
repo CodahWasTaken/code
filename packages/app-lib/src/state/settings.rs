@@ -63,6 +63,8 @@ pub struct Settings {
     pub game_resolution: WindowSize,
     pub hide_on_process_start: bool,
     #[serde(default)]
+    pub close_on_game_start: bool,
+    #[serde(default)]
     pub refocus_on_game_close: bool,
     #[serde(default)]
     pub compact_instance_cards: bool,
@@ -137,6 +139,7 @@ impl Settings {
 				friends_online_collapsed,
 				friends_offline_collapsed,
 				friends_pending_collapsed,
+				close_on_game_start,
                 version
             FROM settings
             "
@@ -189,6 +192,7 @@ impl Settings {
                 res.mc_game_resolution_y as u16,
             ),
             hide_on_process_start: res.hide_on_process_start == 1,
+            close_on_game_start: res.close_on_game_start == 1,
             refocus_on_game_close: res.refocus_on_game_close == 1,
             compact_instance_cards: res.compact_instance_cards == 1,
             show_play_time: res.show_play_time == 1,
@@ -303,7 +307,8 @@ impl Settings {
 				friends_active_collapsed = $50,
 				friends_online_collapsed = $51,
 				friends_offline_collapsed = $52,
-				friends_pending_collapsed = $53
+				friends_pending_collapsed = $53,
+				close_on_game_start = $54
             ",
             max_concurrent_writes,
             max_concurrent_downloads,
@@ -358,6 +363,7 @@ impl Settings {
             self.friends_online_collapsed,
             self.friends_offline_collapsed,
             self.friends_pending_collapsed,
+            self.close_on_game_start,
         )
         .execute(exec)
         .await?;

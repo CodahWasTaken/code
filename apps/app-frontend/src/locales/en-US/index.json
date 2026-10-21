@@ -200,6 +200,12 @@
   "app.auth-servers.unreachable.header": {
     "message": "Cannot reach authentication servers"
   },
+  "app.behavior-settings.close-on-game-start.description": {
+    "message": "Close Modrinth App once Minecraft has started. Play time for that session won't be recorded."
+  },
+  "app.behavior-settings.close-on-game-start.title": {
+    "message": "Close app"
+  },
   "app.behavior-settings.confirmations.title": {
     "message": "Confirmations"
   },

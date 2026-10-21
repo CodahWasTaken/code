@@ -1826,6 +1826,7 @@ export namespace Labrinth {
 
 			export type BehaviorPreferences = {
 				minimize_app: boolean
+				close_on_game_start: boolean
 				refocus_on_game_close: boolean
 				hide_right_sidebar: boolean
 				show_jump_in: boolean

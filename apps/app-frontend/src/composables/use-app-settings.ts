@@ -42,6 +42,7 @@ const appSettings = reactive({
 	friendsOnlineCollapsed: false,
 	friendsOfflineCollapsed: true,
 	friendsPendingCollapsed: true,
+	closeOnGameStart: false,
 	refocusOnGameClose: false,
 	compactInstanceCards: false,
 	showPlayTime: true,

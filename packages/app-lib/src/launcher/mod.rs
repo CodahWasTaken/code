@@ -1282,9 +1282,12 @@ pub async fn launch_minecraft(
         .update_status(Some(instance.name.clone()))
         .await;
 
+    #[cfg(feature = "tauri")]
+    let has_post_exit_hook = post_exit_hook.is_some();
+
     // Create Minecraft child by inserting it into the state
     // This also spawns the process and prepares the subsequent processes
-    state
+    let metadata = state
         .process_manager
         .insert_new_process(
             &instance.id,
@@ -1328,5 +1331,87 @@ pub async fn launch_minecraft(
                 Ok(())
             },
         )
+        .await?;
+
+    #[cfg(feature = "tauri")]
+    if !has_post_exit_hook {
+        tokio::spawn(close_app_once_game_started(metadata.uuid, state.clone()));
+    }
+
+    Ok(metadata)
+}
+
+/// How long a launched game has to keep running before the
+/// `close_on_game_start` setting closes the app, so that a game which fails
+/// early in startup leaves the app open to show what went wrong.
+#[cfg(feature = "tauri")]
+const CLOSE_ON_GAME_START_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(30);
+
+/// How often to check again after [`CLOSE_ON_GAME_START_DELAY`] while the app
+/// is still busy.
+#[cfg(feature = "tauri")]
+const CLOSE_ON_GAME_START_RETRY: std::time::Duration =
+    std::time::Duration::from_secs(5);
+
+/// Closes the app for the `close_on_game_start` setting once the game it
+/// launched has kept running for [`CLOSE_ON_GAME_START_DELAY`] and the app is
+/// not busy. Never started for a launch with a post-exit hook, since the hook
+/// only runs while the app is open.
+#[cfg(feature = "tauri")]
+async fn close_app_once_game_started(uuid: uuid::Uuid, state: Arc<State>) {
+    tokio::time::sleep(CLOSE_ON_GAME_START_DELAY).await;
+
+    loop {
+        let close_on_game_start = crate::state::Settings::get(&state.pool)
+            .await
+            .is_ok_and(|settings| settings.close_on_game_start);
+        let game_running =
+            matches!(state.process_manager.try_wait(uuid), Ok(Some(None)));
+        if !close_on_game_start || !game_running {
+            return;
+        }
+        let Some(event_state) = crate::EventState::try_get() else {
+            return;
+        };
+
+        if !app_is_busy(uuid, &state, &event_state).await {
+            tracing::info!("Closing the app now that the game has started");
+            event_state.app.exit(0);
+            return;
+        }
+
+        tokio::time::sleep(CLOSE_ON_GAME_START_RETRY).await;
+    }
+}
+
+/// Whether closing the app now would get in the user's way: its window has
+/// focus, or it is looking after something besides the game it launched,
+/// such as another running game, an install or a download.
+#[cfg(feature = "tauri")]
+async fn app_is_busy(
+    uuid: uuid::Uuid,
+    state: &State,
+    event_state: &crate::EventState,
+) -> bool {
+    let window_focused = crate::EventState::get_main_window()
         .await
+        .ok()
+        .flatten()
+        .is_some_and(|window| window.is_focused().unwrap_or(true));
+    let other_game_running = state
+        .process_manager
+        .get_all()
+        .iter()
+        .any(|process| process.uuid != uuid);
+    let installing = !matches!(
+        crate::install::store::list_interrupted_candidates(&state.pool).await,
+        Ok(jobs) if jobs.is_empty()
+    );
+
+    window_focused
+        || other_game_running
+        || installing
+        || !state.background_work.is_idle()
+        || !event_state.loading_bars.is_empty()
 }

@@ -63,6 +63,15 @@ const messages = defineMessages({
 		id: 'app.appearance-settings.minimize-launcher.description',
 		defaultMessage: 'Minimize Modrinth App when Minecraft starts.',
 	},
+	closeOnGameStartTitle: {
+		id: 'app.behavior-settings.close-on-game-start.title',
+		defaultMessage: 'Close app',
+	},
+	closeOnGameStartDescription: {
+		id: 'app.behavior-settings.close-on-game-start.description',
+		defaultMessage:
+			"Close Modrinth App once Minecraft has started. Play time for that session won't be recorded.",
+	},
 	refocusOnGameCloseTitle: {
 		id: 'app.behavior-settings.refocus-on-game-close.title',
 		defaultMessage: 'Refocus app when Minecraft closes',
@@ -134,6 +143,7 @@ const messages = defineMessages({
 type BehaviorSettingsState = {
 	syncBehaviorAcrossDevices: boolean
 	minimizeApp: boolean
+	closeOnGameStart: boolean
 	refocusOnGameClose: boolean
 	hideRightSidebar: boolean
 	compactInstanceCards: boolean
@@ -150,6 +160,7 @@ function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState 
 	return {
 		syncBehaviorAcrossDevices: settings.sync_behavior_across_devices,
 		minimizeApp: settings.hide_on_process_start,
+		closeOnGameStart: settings.close_on_game_start,
 		refocusOnGameClose: settings.refocus_on_game_close,
 		compactInstanceCards: settings.compact_instance_cards,
 		showPlayTime: settings.show_play_time,
@@ -168,6 +179,7 @@ const settingsMutation = useMutation({
 			await updatePreferences({
 				behavior: {
 					minimize_app: value.minimizeApp,
+					close_on_game_start: value.closeOnGameStart,
 					refocus_on_game_close: value.refocusOnGameClose,
 					hide_right_sidebar: value.hideRightSidebar,
 					compact_instance_cards: value.compactInstanceCards,
@@ -184,6 +196,7 @@ const settingsMutation = useMutation({
 			...latestSettings,
 			sync_behavior_across_devices: value.syncBehaviorAcrossDevices,
 			hide_on_process_start: value.minimizeApp,
+			close_on_game_start: value.closeOnGameStart,
 			toggle_sidebar: value.hideRightSidebar,
 			hide_nametag_skins_page: value.hideNametag,
 			refocus_on_game_close: value.refocusOnGameClose,
@@ -196,6 +209,7 @@ const settingsMutation = useMutation({
 		await set(nextSettings)
 		queryClient.setQueryData(appSettingsKeys.all, nextSettings)
 		appSettings.setBehaviorSyncAcrossDevices(value.syncBehaviorAcrossDevices)
+		appSettings.closeOnGameStart = value.closeOnGameStart
 		appSettings.refocusOnGameClose = value.refocusOnGameClose
 		appSettings.compactInstanceCards = value.compactInstanceCards
 		appSettings.showPlayTime = value.showPlayTime
@@ -280,6 +294,23 @@ onBeforeUnmount(() => {
 					</p>
 				</div>
 				<Toggle id="minimize-launcher" v-model="current.minimizeApp" />
+			</div>
+
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<h3 id="close-on-game-start-label" class="m-0 text-lg font-semibold text-contrast">
+						{{ formatMessage(messages.closeOnGameStartTitle) }}
+					</h3>
+					<p id="close-on-game-start-description" class="m-0 mt-1">
+						{{ formatMessage(messages.closeOnGameStartDescription) }}
+					</p>
+				</div>
+				<Toggle
+					id="close-on-game-start"
+					v-model="current.closeOnGameStart"
+					aria-labelledby="close-on-game-start-label"
+					aria-describedby="close-on-game-start-description"
+				/>
 			</div>
 
 			<div class="flex items-center justify-between gap-4">

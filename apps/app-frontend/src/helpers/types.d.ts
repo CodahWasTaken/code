@@ -243,6 +243,7 @@ type AppSettings = {
 	force_fullscreen: boolean
 	game_resolution: [number, number]
 	hide_on_process_start: boolean
+	close_on_game_start: boolean
 	show_jump_in: boolean
 	always_show_copy_details: boolean
 	hide_installed_modpacks: boolean

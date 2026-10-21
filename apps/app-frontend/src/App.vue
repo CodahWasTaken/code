@@ -684,6 +684,7 @@ async function setupApp() {
 		show_worlds_tab_in_instances,
 		show_screenshots_tab_in_instances,
 		show_skin_selector_in_sidebar,
+		close_on_game_start,
 		refocus_on_game_close,
 		compact_instance_cards,
 		show_play_time,
@@ -737,6 +738,7 @@ async function setupApp() {
 	appSettings.showWorldsTabInInstances = show_worlds_tab_in_instances
 	appSettings.showScreenshotsTabInInstances = show_screenshots_tab_in_instances
 	appSettings.showSkinSelectorInSidebar = show_skin_selector_in_sidebar
+	appSettings.closeOnGameStart = close_on_game_start
 	appSettings.refocusOnGameClose = refocus_on_game_close
 	appSettings.compactInstanceCards = compact_instance_cards
 	appSettings.showPlayTime = show_play_time
@@ -1024,6 +1026,7 @@ watch(
 
 				if (behavior && appSettings.syncBehaviorAcrossDevices) {
 					const behaviorSettings = {
+						close_on_game_start: 'closeOnGameStart',
 						refocus_on_game_close: 'refocusOnGameClose',
 						compact_instance_cards: 'compactInstanceCards',
 						show_play_time: 'showPlayTime',

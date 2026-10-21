@@ -103,7 +103,9 @@ pub async fn install_project_with_dependencies(
     let instance_id = metadata.instance.id;
     let project_ids = plan_project_ids(&plan);
     let install_plan = plan.clone();
+    let background_work = state.background_work.start();
     tokio::spawn(async move {
+        let _background_work = background_work;
         let result = async {
 			let paths = crate::state::instances::commands::install_resolved_content_plan(
 				&instance_id,
